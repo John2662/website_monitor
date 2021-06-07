@@ -10,5 +10,10 @@
     "notexiting": {
         "url": "https://notexsitsasdiongr.pl/career"
     },
-    "check_period": 3600
+    "colibri": {
+        "url": "https://www.colibri-software.com",
+        "content": "software dev shop"
+    },
+
+    "check_period": 60
 }

@@ -7,7 +7,7 @@ import getopt
 import json
 import logging as log
 import os
-import re
+import re as reg_ex
 import sys
 import threading
 import time
@@ -22,7 +22,7 @@ from .wm_exceptions import (
 
 WORK_DIR = os.path.dirname(os.path.abspath(__file__))
 LOG_DIR = os.path.join(WORK_DIR, 'logs')
-LOG_FILE_PATH = os.path.join(LOG_DIR, 'logfile')
+LOG_FILE_PATH = os.path.join(LOG_DIR, 'logfile.log')
 
 log.basicConfig(filename=LOG_FILE_PATH, format='%(message)s', level=log.INFO)
 
@@ -242,8 +242,8 @@ class Monitor(object):
             website_monitor.exceptions.RequirementsNotFulfilled
         """
         response_content = response.content.decode('utf-8', 'ignore')
-        requirements_are_met = re.search(content_requirements,
-                                         response_content, re.IGNORECASE)
+        requirements_are_met = reg_ex.search(content_requirements,
+                                         response_content, reg_ex.IGNORECASE)
 
         if not content_requirements or requirements_are_met:
             # if there are no requirements or the requirements are fulfilled

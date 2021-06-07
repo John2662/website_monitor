@@ -104,3 +104,8 @@ ENV/
 
 #DB
 *.db
+
+*.log
+
+bin/
+pyvenv.cfg
