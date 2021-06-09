@@ -12,8 +12,11 @@
     },
     "colibri": {
         "url": "https://www.colibri-software.com",
-        "content": "software dev shop"
+        "content": "software dudes"
     },
-
-    "check_period": 60
+    "lfy": {
+        "url": "https://www.lfy.ca",
+        "content": "yurts"
+    },
+    "check_period": 20
 }

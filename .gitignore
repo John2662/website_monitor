@@ -106,6 +106,7 @@ ENV/
 *.db
 
 *.log
+*.swp
 
 bin/
 pyvenv.cfg

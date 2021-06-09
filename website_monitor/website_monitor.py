@@ -27,12 +27,14 @@ LOG_FILE_PATH = os.path.join(LOG_DIR, 'logfile.log')
 log.basicConfig(filename=LOG_FILE_PATH, format='%(message)s', level=log.INFO)
 
 
-class Config(object):
+DEFAULT_CHECK_PERIOD = 3600 
+
+class WebMonitorConfigObject(object):
     """Represents a configuration object."""
 
-    def __init__(self, config_abs_path=None, check_period=0):
+    def __init__(self, check_period=0, defer_to_configs=False, config_abs_path=None ):
         """
-        Initialize a Config instance.
+        Initialize a WebMonitorConfigObject instance.
 
         :param config_abs_path: String representing absolute path
             to configuration file
@@ -40,16 +42,62 @@ class Config(object):
             website status checks.
         """
         config_path = config_abs_path or os.path.join(WORK_DIR, 'config.json')
-        configs = self._load_config(config_path)
-        if check_period:
+        with open(config_path) as f:
+            configs = json.load(f)
+        self.set_check_period_and_web_data(configs, check_period, defer_to_configs)
+
+
+    # check if website properties have at least defined the url
+    # if they are properly formed, add them in the set of
+    # self.websites
+    def extract_websites(self, configs):
+        self.websites = copy.copy(configs)
+        for key, val in configs.items():
+            if 'url' not in val:
+                print('pop ' + key)
+                self.websites.pop(key,None)
+
+    @staticmethod
+    def is_positive_int(i):
+        try:
+            i = int(i)
+        except:
+            return False
+        return i > 0
+
+    def set_check_period_and_web_data(self, configs, provided_check_period, defer_to_configs):
+        try:
+            provided_check_period = int(provided_check_period)
+        except:
+            provided_check_period = 0
+
+        if provided_check_period > 0:
             # if check_period was set on CLI then it takes priority
             # over one specified in config file
-            configs.pop('check_period', None)
+            tmp = configs.pop('check_period', None)
+            if defer_to_configs and self.__class__.is_positive_int(tmp):
+                self.check_period = tmp
+            else:
+                self.check_period = provided_check_period
+            self.extract_websites(configs)
+            print('check_period 1 ' + str(self.check_period))
+            return
+        # Nothing provided, so see if there is a check period in the config data
+        provided_check_period = configs.pop('check_period', 0)
+        try:
+            provided_check_period = int(provided_check_period)
+        except:
+            provided_check_period = 0
 
-        # sets default check_period to 3600s(1h) if not specified on CLI
-        # nor in config file.
-        self.check_period = check_period or configs.pop('check_period', 3600)
-        self.websites = configs
+        if provided_check_period > 0:
+            self.check_period = provided_check_period
+            self.extract_websites(configs)
+            print('check_period 2 ' + str(self.check_period))
+            return
+        # If we still have no check period, set it to a default value 
+        self.check_period = DEFAULT_CHECK_PERIOD
+        self.extract_websites(configs)
+        print('check_period 3 ' + str(self.check_period))
 
     @property
     def check_period(self):
@@ -60,63 +108,14 @@ class Config(object):
         try:
             val = int(val)
         except ValueError:
-            s = ('Please make sure that check period value is specified '
+            print('Please make sure that check period value is specified '
                  'as integer.')
-            raise ValueError(s)
-
+            return False
         if val < 0:
-            s = ('Checking period cannot be negative. Please set correct '
+            print('Checking period cannot be negative. Please set correct '
                  'value and try again.')
-            raise ValueError(s)
+            return False
         self.__check_period = val
-
-    @staticmethod
-    def _validate_config(configs):
-        """
-        Class method used for validating config file.
-
-        :param configs: dict containing configuration parameters
-        :return: If successfully validated returns True,
-            otherwise raises Exception
-        """
-
-        # check if config file is completely empty
-        if not len(configs):
-            s = ('The config file is empty. Please ensure that config file '
-                 'is not empty and try again.')
-            raise ConfigFileEmpty(s)
-
-        # check if there are any other properties except 'check_period'
-        tmp_data = copy.copy(configs)
-        tmp_data.pop('check_period', 0)
-        if not len(tmp_data):
-            s = ('Please enter settings for at least one website in your '
-                 'config file and try again.')
-            raise ConfigFileInvalid(s)
-
-        # check if website proprties have at least defined url
-        for webname, web_data in configs.items():
-            if webname == 'check_period':
-                continue
-            if 'url' not in web_data:
-                s = ('Website property {} does not contain required URL '
-                     'property. Please specify URL property and try again.')
-                raise URLPropertyNotFound(s.format(webname))
-        return True
-
-    def _load_config(self, config_path):
-        """
-        Helper function used to read settings from configuration file.
-
-        :return: If successfully read config file returns True
-        """
-        with open(config_path) as f:
-            configs = json.load(f)
-
-        self.__class__._validate_config(configs)
-
-        return configs
-
 
 class Monitor(object):
     """Represents Monitor object."""
@@ -126,10 +125,13 @@ class Monitor(object):
         """
         Initialize a Monitor instance.
 
-        :param config_obj: website_monitor.Config class instance
+        :param config_obj: website_monitor.WebMonitorConfigObject class instance
         """
-        self.config = config_obj
+        self.config_store = config_obj
         self.next_call = time.time()
+
+    def hot_load_config(self):
+        self.config_store = WebMonitorConfigObject(self.config_store.check_period, True)
 
     def start_watch(self):
         """
@@ -138,8 +140,9 @@ class Monitor(object):
 
         :return: None
         """
+        self.hot_load_config()
         self._start_checks()
-        self.next_call += self.config.check_period
+        self.next_call += self.config_store.check_period
         # accounts for drift
         # more at https://stackoverflow.com/a/18180189/2808371
         threading.Timer(self.next_call - time.time(), self.start_watch).start()
@@ -160,7 +163,7 @@ class Monitor(object):
                               time_format)))
 
         threads = []
-        for webname, web_data in self.config.websites.items():
+        for webname, web_data in self.config_store.websites.items():
             url = web_data['url']
             content_requirements = web_data.get('content', None)
             t = threading.Thread(target=self._perform_checks, args=(
@@ -280,8 +283,8 @@ def parse_cl_args(argv):
 def main():
     interval = parse_cl_args(sys.argv[1:])
     db_utils.create_table()
-    config = Config(check_period=interval)
-    Monitor(config).start_watch()
+    local_config_object = WebMonitorConfigObject(check_period=interval)
+    Monitor(local_config_object).start_watch()
 
 if __name__ == '__main__':
     main()
