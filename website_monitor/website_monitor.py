@@ -32,7 +32,7 @@ DEFAULT_CHECK_PERIOD = 3600
 class WebMonitorConfigObject(object):
     """Represents a configuration object."""
 
-    def __init__(self, check_period=0, defer_to_configs=False, config_abs_path=None ):
+    def __init__(self, check_period=0, defer_to_store=False, config_abs_path=None):
         """
         Initialize a WebMonitorConfigObject instance.
 
@@ -44,8 +44,7 @@ class WebMonitorConfigObject(object):
         config_path = config_abs_path or os.path.join(WORK_DIR, 'config.json')
         with open(config_path) as f:
             configs = json.load(f)
-        self.set_check_period_and_web_data(configs, check_period, defer_to_configs)
-
+        self.set_check_period_and_web_data(configs, check_period, defer_to_store)
 
     # check if website properties have at least defined the url
     # if they are properly formed, add them in the set of
@@ -65,39 +64,32 @@ class WebMonitorConfigObject(object):
             return False
         return i > 0
 
-    def set_check_period_and_web_data(self, configs, provided_check_period, defer_to_configs):
+    @staticmethod
+    def extract_check_period_from_input(test_check_period):
         try:
-            provided_check_period = int(provided_check_period)
+            test_check_period = int(test_check_period)
         except:
-            provided_check_period = 0
+            test_check_period = 0
+        return test_check_period
 
-        if provided_check_period > 0:
-            # if check_period was set on CLI then it takes priority
-            # over one specified in config file
-            tmp = configs.pop('check_period', None)
-            if defer_to_configs and self.__class__.is_positive_int(tmp):
-                self.check_period = tmp
-            else:
-                self.check_period = provided_check_period
-            self.extract_websites(configs)
-            print('check_period 1 ' + str(self.check_period))
-            return
-        # Nothing provided, so see if there is a check period in the config data
-        provided_check_period = configs.pop('check_period', 0)
-        try:
-            provided_check_period = int(provided_check_period)
-        except:
-            provided_check_period = 0
-
-        if provided_check_period > 0:
-            self.check_period = provided_check_period
-            self.extract_websites(configs)
-            print('check_period 2 ' + str(self.check_period))
-            return
-        # If we still have no check period, set it to a default value 
-        self.check_period = DEFAULT_CHECK_PERIOD
+    def set_check_period_and_web_data(self, configs, passed_check_period, defer_to_store):
+        passed_check_period = self.__class__.extract_check_period_from_input(passed_check_period)
+        stored_check_period = self.__class__.extract_check_period_from_input(configs.pop('check_period', 0))
         self.extract_websites(configs)
-        print('check_period 3 ' + str(self.check_period))
+
+        time_format = '%d/%m/%Y %H:%M:%S'
+        current_time=datetime.datetime.now().strftime(time_format)
+        print(str(current_time))
+        print('passed = ' + str(passed_check_period))
+        print('stored = ' + str(stored_check_period))
+
+        if defer_to_store and stored_check_period > 0:
+            self.check_period = stored_check_period
+        elif passed_check_period > 0:
+            self.check_period = passed_check_period
+        else:
+            self.check_period = DEFAULT_CHECK_PERIOD
+        print('check_period = ' + str(self.check_period))
 
     @property
     def check_period(self):
@@ -121,17 +113,19 @@ class Monitor(object):
     """Represents Monitor object."""
     config_obj = None
 
-    def __init__(self, config_obj):
+    def __init__(self, check_interval):
         """
         Initialize a Monitor instance.
 
         :param config_obj: website_monitor.WebMonitorConfigObject class instance
         """
-        self.config_store = config_obj
+        self.config_store = WebMonitorConfigObject(check_interval, False)
         self.next_call = time.time()
+        self.start_watch()
 
     def hot_load_config(self):
-        self.config_store = WebMonitorConfigObject(self.config_store.check_period, True)
+        defer_to_json_configs = True
+        self.config_store = WebMonitorConfigObject(self.config_store.check_period, defer_to_json_configs)
 
     def start_watch(self):
         """
@@ -143,6 +137,7 @@ class Monitor(object):
         self.hot_load_config()
         self._start_checks()
         self.next_call += self.config_store.check_period
+        print(f'set up next call in {self.next_call - time.time()} seconds')
         # accounts for drift
         # more at https://stackoverflow.com/a/18180189/2808371
         threading.Timer(self.next_call - time.time(), self.start_watch).start()
@@ -162,8 +157,13 @@ class Monitor(object):
                           current_time=datetime.datetime.now().strftime(
                               time_format)))
 
+        print('*%*%*%*%*%*')
+        current_time=datetime.datetime.now().strftime(time_format)
+        print(current_time)
+
         threads = []
         for webname, web_data in self.config_store.websites.items():
+            print(webname)
             url = web_data['url']
             content_requirements = web_data.get('content', None)
             t = threading.Thread(target=self._perform_checks, args=(
@@ -283,8 +283,7 @@ def parse_cl_args(argv):
 def main():
     interval = parse_cl_args(sys.argv[1:])
     db_utils.create_table()
-    local_config_object = WebMonitorConfigObject(check_period=interval)
-    Monitor(local_config_object).start_watch()
+    Monitor(interval)
 
 if __name__ == '__main__':
     main()

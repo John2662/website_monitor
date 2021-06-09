@@ -12,10 +12,10 @@
     },
     "colibri": {
         "url": "https://www.colibri-software.com",
-        "content": "software dudes"
+        "content": "software"
     },
     "lfy": {
-        "url": "https://www.lfy.ca",
+        "burl": "https://www.lfy.ca",
         "content": "yurts"
     },
     "check_period": 20
