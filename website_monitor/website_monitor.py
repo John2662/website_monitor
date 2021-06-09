@@ -53,7 +53,6 @@ class WebMonitorConfigObject(object):
         self.websites = copy.copy(configs)
         for key, val in configs.items():
             if 'url' not in val:
-                print('pop ' + key)
                 self.websites.pop(key,None)
 
     @staticmethod
@@ -76,20 +75,12 @@ class WebMonitorConfigObject(object):
         passed_check_period = self.__class__.extract_check_period_from_input(passed_check_period)
         stored_check_period = self.__class__.extract_check_period_from_input(configs.pop('check_period', 0))
         self.extract_websites(configs)
-
-        time_format = '%d/%m/%Y %H:%M:%S'
-        current_time=datetime.datetime.now().strftime(time_format)
-        print(str(current_time))
-        print('passed = ' + str(passed_check_period))
-        print('stored = ' + str(stored_check_period))
-
         if defer_to_store and stored_check_period > 0:
             self.check_period = stored_check_period
         elif passed_check_period > 0:
             self.check_period = passed_check_period
         else:
             self.check_period = DEFAULT_CHECK_PERIOD
-        print('check_period = ' + str(self.check_period))
 
     @property
     def check_period(self):
@@ -137,7 +128,6 @@ class Monitor(object):
         self.hot_load_config()
         self._start_checks()
         self.next_call += self.config_store.check_period
-        print(f'set up next call in {self.next_call - time.time()} seconds')
         # accounts for drift
         # more at https://stackoverflow.com/a/18180189/2808371
         threading.Timer(self.next_call - time.time(), self.start_watch).start()
@@ -157,13 +147,8 @@ class Monitor(object):
                           current_time=datetime.datetime.now().strftime(
                               time_format)))
 
-        print('*%*%*%*%*%*')
-        current_time=datetime.datetime.now().strftime(time_format)
-        print(current_time)
-
         threads = []
         for webname, web_data in self.config_store.websites.items():
-            print(webname)
             url = web_data['url']
             content_requirements = web_data.get('content', None)
             t = threading.Thread(target=self._perform_checks, args=(
