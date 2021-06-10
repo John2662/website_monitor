@@ -111,12 +111,22 @@ class Monitor(object):
         :param config_obj: website_monitor.WebMonitorConfigObject class instance
         """
         self.config_store = WebMonitorConfigObject(check_interval, False)
+        self.load_website_query_table()
+
         self.next_call = time.time()
         self.start_watch()
 
     def hot_load_config(self):
         defer_to_json_configs = True
         self.config_store = WebMonitorConfigObject(self.config_store.check_period, defer_to_json_configs)
+
+
+    def load_website_query_table(self):
+        for webname, web_data in self.config_store.websites.items():
+            url = web_data['url']
+            content_requirements = web_data.get('content', None)
+            print(f'{webname}, {url}, {content_requirements}')
+            db_utils.insert_webcheck_config(webname, url, content_requirements)
 
     def start_watch(self):
         """
@@ -176,20 +186,21 @@ class Monitor(object):
         if not response:
             return
         response_time = response.elapsed / datetime.timedelta(seconds=1)
+        requirements_fulfilled = 1
         try:
             self.check_requirements(response, content_requirements)
         except RequirementsNotFulfilled as e:
             s = ('Content requirements: {e} ("{content_requirements}" '
                  'not in response content)')
             log.info(s.format(**locals()))
-            db_utils.record_insert(webname, url, datetime.datetime.now(),
-                                   response.status_code, response_time, 0)
+            requirements_fulfilled = 0
         else:
             s = ('Content requirements: Website meets content requirements.'
                  '("{content_requirements}" in response content)')
             log.info(s.format(**locals()))
-            db_utils.record_insert(webname, url, datetime.datetime.now(),
-                                   response.status_code, response_time, 1)
+
+        db_utils.insert_webcheck_record(webname, url, datetime.datetime.now(),
+                              response.status_code, response_time, requirements_fulfilled)
 
     @staticmethod
     def make_request(url, webname=None):
@@ -206,7 +217,7 @@ class Monitor(object):
             error_msg = str(e)
             s = 'Connection problem\nError message: {}\n'
             log.info(s.format(error_msg))
-            db_utils.record_insert(
+            db_utils.insert_webcheck_record(
                 webname, url, request_time=datetime.datetime.now(),
                 error=error_msg)
         else:
@@ -267,7 +278,7 @@ def parse_cl_args(argv):
 
 def main():
     interval = parse_cl_args(sys.argv[1:])
-    db_utils.create_table()
+    db_utils.create_tables()
     Monitor(interval)
 
 if __name__ == '__main__':

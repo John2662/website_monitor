@@ -10,11 +10,16 @@ app = Flask(__name__)
 
 @app.route('/', methods=['GET'])
 def index():
-    records = db_utils.get_all_records()
+    records = db_utils.get_all_webcheck_records()
     records = sorted(records, key=lambda x: datetime.strptime(
         x[3], "%d-%m-%Y %H:%M:%S"), reverse=True)
 
     return render_template('index.html', records=records)
+
+@app.route('/edit/', methods=['GET'])
+def edit_db():
+    records = db_utils.get_all_webcheck_configs()
+    return render_template('edit.html', records=records)
 
 
 def main():

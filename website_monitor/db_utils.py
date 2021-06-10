@@ -29,7 +29,7 @@ def get_connection():
     return (conn, cur)
 
 
-def create_table():
+def create_tables():
     """
     Helper function used to populate database with nescessary table.
 
@@ -54,11 +54,27 @@ def create_table():
         conn.commit()
     except Exception as e:
         print("Error while creating table: {}".format(e))
+
+    try:
+        cur.execute(
+            '''
+            CREATE TABLE website_configs (
+                id	INTEGER,
+                webname	TEXT,
+                url	TEXT,
+                content	TEXT,
+                PRIMARY KEY(id))
+            '''
+        )
+        conn.commit()
+    except Exception as e:
+        print("Error while creating table: {}".format(e))
+
     finally:
         conn.close()
 
 
-def record_insert(webname, url, request_time=None, status=None,
+def insert_webcheck_record(webname, url, request_time=None, status=None,
                   response_time=None, requirements=None, error=None):
     """
     Helper function used to create records in the database table.
@@ -89,8 +105,29 @@ def record_insert(webname, url, request_time=None, status=None,
     finally:
         conn.close()
 
+def insert_webcheck_config(webname, url, content=None):
+    """
+    Helper function used to create records in the database table.
 
-def get_all_records():
+    :param webname: Alias name of the website
+    :param url: Website URL
+    :param requirements: Content requirements for specific website
+    """
+    conn, cur = get_connection()
+    try:
+        cur.execute(
+            '''
+            INSERT INTO website_configs (
+                webname, url, content
+            ) VALUES(?,?,?)
+            ''', (webname, url, content))
+        conn.commit()
+    except Exception as e:
+        print("Error while making INSERT: {}".format(e))
+    finally:
+        conn.close()
+
+def get_all_webcheck_records():
     """
     Helper function used to fetch all the records from database table.
 
@@ -100,6 +137,24 @@ def get_all_records():
     records = []
     try:
         cur.execute('''SELECT * FROM website_checks''')
+        records = cur.fetchall()
+    except Exception as e:
+        print("Error while getting all records: {}".format(e))
+    finally:
+        conn.close()
+
+    return records
+
+def get_all_webcheck_configs():
+    """
+    Helper function used to fetch all the records from database table.
+
+    :return: List of tuples representing status check records.
+    """
+    conn, cur = get_connection()
+    records = []
+    try:
+        cur.execute('''SELECT * FROM website_configs''')
         records = cur.fetchall()
     except Exception as e:
         print("Error while getting all records: {}".format(e))
