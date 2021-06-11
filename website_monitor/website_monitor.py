@@ -119,6 +119,7 @@ class Monitor(object):
     def hot_load_config(self):
         defer_to_json_configs = True
         self.config_store = WebMonitorConfigObject(self.config_store.check_period, defer_to_json_configs)
+        self.load_website_query_table()
 
 
     def load_website_query_table(self):

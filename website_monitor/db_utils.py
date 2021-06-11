@@ -105,6 +105,31 @@ def insert_webcheck_record(webname, url, request_time=None, status=None,
     finally:
         conn.close()
 
+
+# This is likely very inefficient
+new_record = 'new_record'
+modification = 'modification'
+redundant = 'redundant'
+def is_in_database(webname, url, content):
+    conn, cur = get_connection()
+    records = []
+    try:
+        cur.execute('''SELECT * FROM website_configs''')
+        records = cur.fetchall()
+        for record in records:
+            if len(record) < 1:
+                continue
+            if webname == record[1]:
+                if len(record) < 3 or record[2] != url or record[3] != content:
+                    return modification
+                return redundant
+    except Exception as e:
+        print("Error while getting all records: {}".format(e))
+    finally:
+        conn.close()
+    return new_record
+
+
 def insert_webcheck_config(webname, url, content=None):
     """
     Helper function used to create records in the database table.
@@ -114,18 +139,41 @@ def insert_webcheck_config(webname, url, content=None):
     :param requirements: Content requirements for specific website
     """
     conn, cur = get_connection()
-    try:
-        cur.execute(
-            '''
-            INSERT INTO website_configs (
-                webname, url, content
-            ) VALUES(?,?,?)
-            ''', (webname, url, content))
-        conn.commit()
-    except Exception as e:
-        print("Error while making INSERT: {}".format(e))
-    finally:
+    candidate_rec = is_in_database(webname, url, content)
+    if candidate_rec == redundant:
         conn.close()
+        return
+
+    if candidate_rec == new_record:
+        try:
+            cur.execute(
+                '''
+                INSERT INTO website_configs (
+                    webname, url, content
+                ) VALUES(?,?,?)
+                ''', (webname, url, content))
+            conn.commit()
+        except Exception as e:
+            print("Error while making INSERT: {}".format(e))
+        finally:
+            conn.close()
+            return
+
+    elif candidate_rec == modification:
+        try:
+            sql = ''' UPDATE website_configs
+                SET url = ?,
+                    content = ?
+                WHERE webname = ?
+                '''
+            cur.execute(sql, (url, content, webname) )
+            conn.commit()
+        except Exception as e:
+            print("Error while making UPDATE: {}".format(e))
+        finally:
+            conn.close()
+            print('done\n')
+            return
 
 def get_all_webcheck_records():
     """
